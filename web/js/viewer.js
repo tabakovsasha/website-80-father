@@ -1,7 +1,7 @@
 (function() {
     'use strict';
 
-    const CONFIG = { swipeThreshold: 120, wheelCooldown: 200, transitionDuration: 300, maxZoom: 4 };
+    const CONFIG = { swipeThreshold: 120, wheelCooldown: 200, transitionDuration: 300, transitionFallback: 180, maxZoom: 4 };
     const viewer = document.getElementById('viewer');
     const viewport = document.getElementById('carousel-viewport');
     const track = document.getElementById('carousel-track');
@@ -146,11 +146,22 @@
         if (state.animating || !validDirection(direction)) return;
         state.animating = true;
         const destination = neutralPosition() + (direction > 0 ? -viewportHeight() : viewportHeight());
+        let completed = false;
+        let fallbackTimer;
+        const complete = () => {
+            if (completed) return;
+            completed = true;
+            clearTimeout(fallbackTimer);
+            track.removeEventListener('transitionend', onEnd);
+            finishTransition(direction);
+        };
         const onEnd = (event) => {
             if (event.target !== track || event.propertyName !== 'transform') return;
-            track.removeEventListener('transitionend', onEnd); finishTransition(direction);
+            complete();
         };
-        track.addEventListener('transitionend', onEnd); setTrackPosition(destination, true);
+        track.addEventListener('transitionend', onEnd);
+        setTrackPosition(destination, true);
+        fallbackTimer = setTimeout(complete, CONFIG.transitionDuration + CONFIG.transitionFallback);
     }
 
     function updateDrag(deltaY) {
