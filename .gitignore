@@ -19,6 +19,12 @@ temp/
 # Local slide assets
 web/images/
 
+# Workspace/tooling metadata (not part of the website itself)
+.agents/
+.github/
+AGENTS.md
+skills-lock.json
+
 # Local-only generated files that are not part of the app itself
 # Keep the actual website source and slide assets tracked.
 # The generated manifest and the web assets are intentionally not ignored.
