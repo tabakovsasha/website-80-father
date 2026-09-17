@@ -48,6 +48,7 @@ def proxy_analytics(handler, method: str, body: bytes = b"") -> None:
             payload = response.read()
             handler.send_response(response.status)
             handler.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
+            handler.send_header("Cache-Control", "no-store")
             handler.send_header("Content-Length", str(len(payload)))
             handler.end_headers()
             handler.wfile.write(payload)
@@ -118,6 +119,9 @@ class SlideshowHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def end_headers(self):
+        path = urlparse(self.path).path
+        if path in ("/", "/index.html") or path.startswith(("/images/", "/css/", "/js/", "/favicon")):
+            self.send_header("Cache-Control", "public, max-age=3600")
         self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
 
