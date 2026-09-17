@@ -1,143 +1,148 @@
-/* style.css - стили для mobile-fullscreen viewer Петра Табакова */
-
 :root {
-    --bg-color: #000;
-    --accent-opacity: 0.85;
-    --counter-bg: rgba(0, 0, 0, 0.7);
-    --transition-fast: 0.2s;
-    --transition-slow: 0.5s;
+    --bg: #050506;
+    --panel: rgba(18, 18, 20, 0.72);
+    --text: #f2f4f5;
+    --muted: rgba(255, 255, 255, 0.7);
+    --transition: 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
+* { box-sizing: border-box; }
 html, body {
+    margin: 0;
     height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     overflow: hidden;
-    scroll-behavior: smooth;
-    font-family: system-ui, -apple-system, sans-serif;
-    background-color: #000;
-    color: #fff;
+}
+
+body {
+    user-select: none;
+    touch-action: none;
 }
 
 #viewer {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background-color: #000;
-    overflow: hidden;
     position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg);
+    isolation: isolate;
 }
 
-/* Фон - размытое увеличенное изображение */
-#background {
+#carousel-viewport,
+#carousel-track,
+.slide-slot {
     position: absolute;
     width: 100%;
     height: 100%;
+    display: block;
+}
+
+#carousel-viewport {
+    inset: 0;
+    overflow: hidden;
+    z-index: 1;
+    touch-action: none;
+}
+
+#carousel-track {
     top: 0;
     left: 0;
-    object-fit: cover;
-    z-index: 0;
-    opacity: 0;
-    transition: opacity var(--transition-slow) ease;
+    height: 300%;
+    display: flex;
+    flex-direction: column;
+    will-change: transform;
 }
 
-#background.visible {
-    opacity: 1;
+.slide-slot {
+    position: relative;
+    flex: 0 0 33.333333%;
+    overflow: hidden;
+    background: var(--bg);
 }
 
-#image {
+.slot-background {
     position: absolute;
-    width: calc(100dvh - var(--safe-total));
-    height: calc(100dvh - var(--safe-total));
-    object-fit: contain;
-    z-index: 1;
-    max-width: 100%;
-    max-height: 100%;
-    background-repeat: no-repeat;
+    inset: 0;
     background-position: center;
-    transition: transform var(--transition-fast) ease-out;
+    background-size: cover;
+    filter: blur(18px) saturate(1.1) brightness(0.8);
+    transform: scale(1.08);
 }
 
-/* Счетчик */
+.slot-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    will-change: transform;
+}
+
+.status-message {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 5;
+    transform: translate(-50%, -50%);
+    color: #dfe5ee;
+}
+
+.status-message.error {
+    color: #ffb4b4;
+}
+
 #counter {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 10;
-    font-size: 1.2rem;
-    background: var(--counter-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-radius: 8px;
-    padding: 8px 16px;
-    line-height: 1.4;
-    opacity: 0;
-    transform: translateY(-10px);
-    transition: opacity var(--transition-fast), transform var(--transition-fast);
-    pointer-events: none;
+    top: 16px;
+    left: 16px;
+    z-index: 30;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    font-size: 0.95rem;
+    color: var(--text);
 }
 
-#counter.visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* Переключение слайдов */
-.slide-indicator {
-    position: absolute;
-    bottom: 40px;
-    z-index: 10;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.8rem;
-    pointer-events: none;
-}
-
-#prev-indicator {
-    left: 20px;
-}
-
-#next-indicator {
-    right: 20px;
-}
-
-/* Анимация zoom */
-#image.zoomed {
-    transform: scale(2);
-    transition-transform: scale(2) var(--transition-slow) cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-/* Загрузка */
 #loader {
     position: absolute;
-    top: 50%;
     left: 50%;
+    top: 50%;
+    z-index: 40;
     transform: translate(-50%, -50%);
-    color: #fff;
-    font-size: 1.2rem;
+    background: var(--panel);
+    border-radius: 999px;
+    padding: 10px 18px;
+    color: var(--text);
     display: none;
 }
 
-/* Безопасная зона для iPhone */
-@supports not (padding: env(safe-area-inset-top)) {
-    #viewer {
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
+.slide-indicator {
+    position: absolute;
+    inset: auto 16px 16px 16px;
+    z-index: 30;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    color: var(--muted);
+    font-size: 1.2rem;
+}
+
+@media (max-width: 720px) {
+    #counter {
+        left: 12px;
+        top: 12px;
+        font-size: 0.85rem;
+    }
+
+    .slide-indicator {
+        inset: auto 12px 12px 12px;
     }
 }
 
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-    #background,
-    #image {
-        transition: none;
-    }
+    #carousel-track { transition: none !important; }
 }

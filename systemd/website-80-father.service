@@ -1,0 +1,15 @@
+[Unit]
+Description=80 years slideshow service for Petr Tabakov
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/website-80-father
+ExecStart=/usr/bin/python3 /opt/website-80-father/app.py
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Environment=PORT=8080
+
+[Install]
+WantedBy=multi-user.target

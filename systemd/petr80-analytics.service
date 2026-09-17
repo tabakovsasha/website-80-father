@@ -1,0 +1,21 @@
+[Unit]
+Description=Petr Tabakov 80 analytics service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/website-80-father
+ExecStart=/usr/bin/python3 /opt/website-80-father/analytics_service.py
+Restart=on-failure
+RestartSec=3
+User=petr80-analytics
+Group=petr80-analytics
+Environment=PYTHONUNBUFFERED=1
+Environment=ANALYTICS_DB_DIR=/var/lib/petr80-analytics
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/petr80-analytics
+
+[Install]
+WantedBy=multi-user.target
