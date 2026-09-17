@@ -129,6 +129,24 @@ sudo journalctl -u website-80-father.service -f
 sudo journalctl -u petr80-analytics.service -f
 ```
 
+## Полностью остановить сервисы
+
+Чтобы остановить сайт и analytics и запретить их автоматический запуск после reboot:
+
+```bash
+sudo systemctl disable --now website-80-father.service
+sudo systemctl disable --now petr80-analytics.service
+```
+
+Проверка:
+
+```bash
+systemctl is-active website-80-father.service petr80-analytics.service
+ss -ltn | grep -E ':8080|:8081' || true
+```
+
+Эти команды не останавливают внешний Caddy на отдельной VM.
+
 ## Веб-сайт
 
 После запуска приложение доступно по адресу:
