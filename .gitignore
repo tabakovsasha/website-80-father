@@ -1,0 +1,24 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local runtime and temp files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+.cache/
+
+# Local slide assets
+web/images/
+
+# Local-only generated files that are not part of the app itself
+# Keep the actual website source and slide assets tracked.
+# The generated manifest and the web assets are intentionally not ignored.

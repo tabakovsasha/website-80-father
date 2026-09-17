@@ -1,0 +1,143 @@
+/* style.css - стили для mobile-fullscreen viewer Петра Табакова */
+
+:root {
+    --bg-color: #000;
+    --accent-opacity: 0.85;
+    --counter-bg: rgba(0, 0, 0, 0.7);
+    --transition-fast: 0.2s;
+    --transition-slow: 0.5s;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    scroll-behavior: smooth;
+    font-family: system-ui, -apple-system, sans-serif;
+    background-color: #000;
+    color: #fff;
+}
+
+#viewer {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #000;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Фон - размытое увеличенное изображение */
+#background {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    object-fit: cover;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity var(--transition-slow) ease;
+}
+
+#background.visible {
+    opacity: 1;
+}
+
+#image {
+    position: absolute;
+    width: calc(100dvh - var(--safe-total));
+    height: calc(100dvh - var(--safe-total));
+    object-fit: contain;
+    z-index: 1;
+    max-width: 100%;
+    max-height: 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    transition: transform var(--transition-fast) ease-out;
+}
+
+/* Счетчик */
+#counter {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    font-size: 1.2rem;
+    background: var(--counter-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 8px 16px;
+    line-height: 1.4;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+    pointer-events: none;
+}
+
+#counter.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Переключение слайдов */
+.slide-indicator {
+    position: absolute;
+    bottom: 40px;
+    z-index: 10;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+#prev-indicator {
+    left: 20px;
+}
+
+#next-indicator {
+    right: 20px;
+}
+
+/* Анимация zoom */
+#image.zoomed {
+    transform: scale(2);
+    transition-transform: scale(2) var(--transition-slow) cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Загрузка */
+#loader {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 1.2rem;
+    display: none;
+}
+
+/* Безопасная зона для iPhone */
+@supports not (padding: env(safe-area-inset-top)) {
+    #viewer {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    #background,
+    #image {
+        transition: none;
+    }
+}
