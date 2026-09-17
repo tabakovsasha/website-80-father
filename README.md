@@ -11,7 +11,11 @@
 - обслуживает только сайт и slide API на `0.0.0.0:8080`;
 - отправляет аналитику через внутренний proxy в отдельный localhost-сервис на `127.0.0.1:8081`.
 
-Caddy на другом VM управляет внешним HTTPS и reverse proxy на этот сервис.
+В production приложение работает на `prod-app-01`. Внешний HTTPS и reverse proxy выполняет Caddy на отдельной VM:
+
+```text
+Браузер -> HTTPS -> Caddy -> HTTP prod-app-01:8080 -> website-80-father.service
+```
 
 ## Структура проекта
 
@@ -24,7 +28,6 @@ Caddy на другом VM управляет внешним HTTPS и reverse pr
 - `scripts/analytics_cli.py` — CLI для статистики;
 - `systemd/website-80-father.service` — unit сайта;
 - `systemd/petr80-analytics.service` — unit аналитики;
-- `nginx/website-80-father.conf` — optional nginx configuration for `/analytics/` proxy.
 
 ## Слайды
 
@@ -45,7 +48,7 @@ Caddy на другом VM управляет внешним HTTPS и reverse pr
 
 ```bash
 sudo apt update
-sudo apt install -y python3 nginx
+sudo apt install -y python3
 sudo mkdir -p /opt/website-80-father
 sudo cp -a ./ /opt/website-80-father/
 cd /opt/website-80-father
@@ -83,24 +86,7 @@ sudo systemctl enable --now petr80-analytics.service
 `enable` добавляет автозапуск после reboot, `--now` запускает units сразу.
 `chown` нужен, чтобы analytics-пользователь мог писать в SQLite после переноса базы или восстановления backup.
 
-### 3. Настроить nginx для analytics (опционально)
-
-Обычная схема уже работает без отдельного nginx-маршрута: `app.py` принимает `/analytics/*` на `8080` и передаёт запросы в analytics backend на `127.0.0.1:8081`.
-
-Если nginx должен сам проксировать `/analytics/`, не запускайте его на `8080`, пока `website-80-father.service` уже слушает этот порт. Используйте отдельную согласованную схему портов.
-
-Если nginx на этом сервере должен проксировать `/analytics/`, установите server block в существующий `http { ... }` контекст:
-
-```bash
-sudo cp /opt/website-80-father/nginx/website-80-father.conf /etc/nginx/sites-available/website-80-father
-sudo ln -sf /etc/nginx/sites-available/website-80-father /etc/nginx/sites-enabled/website-80-father
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-Перед reload убедитесь, что nginx и Python-сервис не используют один и тот же `listen`-порт.
-
-### 4. Проверить запуск
+### 3. Проверить запуск
 
 ```bash
 systemctl is-active website-80-father.service
@@ -110,6 +96,19 @@ curl http://127.0.0.1:8080/api/slides
 curl http://127.0.0.1:8081/healthz
 ss -ltn | grep -E ':8080|:8081'
 ```
+
+Ожидаемые listeners:
+
+```text
+0.0.0.0:8080    website-80-father.service
+127.0.0.1:8081  petr80-analytics.service
+```
+
+`petr80-analytics.service` не должен быть доступен извне. `website-80-father.service` принимает `/analytics/*` на `8080` и внутренне передаёт запросы на `127.0.0.1:8081`.
+
+### 4. Настроить внешний Caddy
+
+Caddy работает на отдельной VM и проксирует внешний HTTPS-запрос на `prod-app-01:8080`. Конфигурация Caddy находится вне этого репозитория и здесь не требуется.
 
 После перезагрузки сервера проверить ещё раз:
 
@@ -138,11 +137,11 @@ sudo journalctl -u petr80-analytics.service -f
 http://0.0.0.0:8080/
 ```
 
-Через Caddy снаружи это будет работать как обычный HTTPS-запрос на вашем домене.
+Через Caddy на отдельной VM сайт доступен по публичному HTTPS-домену.
 
 ## Analytics
 
-Nginx keeps the public site on port `8080` and proxies only `/analytics/` to `127.0.0.1:8081`. The analytics backend is never bound to a public interface.
+`website-80-father.service` принимает публичные запросы на `0.0.0.0:8080`, включая `/analytics/*`, и проксирует analytics внутри процесса на `127.0.0.1:8081`. nginx на `prod-app-01` не требуется. Не запускайте nginx на `:8080` одновременно с `website-80-father.service`.
 
 Anonymous visitors are stored in SQLite at:
 
