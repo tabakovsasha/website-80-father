@@ -37,11 +37,15 @@ def json_response(handler, payload: dict, status: int = 200) -> None:
 
 
 def proxy_analytics(handler, method: str, body: bytes = b"") -> None:
+    headers = {"Content-Type": "application/json"} if method == "POST" else {}
+    user_agent = handler.headers.get("User-Agent")
+    if user_agent:
+        headers["User-Agent"] = user_agent
     request = Request(
         f"{ANALYTICS_BACKEND}{urlparse(handler.path).path}",
         data=body if method == "POST" else None,
         method=method,
-        headers={"Content-Type": "application/json"} if method == "POST" else {},
+        headers=headers,
     )
     try:
         with urlopen(request, timeout=2) as response:

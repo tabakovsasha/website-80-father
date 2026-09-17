@@ -19,6 +19,12 @@ def list_slides() -> list[str]:
     )
 
 
+def device_label(platform: str, browser: str) -> str:
+    if platform == "Unknown" and browser == "Unknown":
+        return "Unknown"
+    return f"{platform} / {browser}"
+
+
 def stats() -> dict:
     if not DB_PATH.exists():
         return {
@@ -42,14 +48,31 @@ def stats() -> dict:
     visitor_rows = conn.execute(
         "SELECT visitor_id, COUNT(DISTINCT slide_id) AS viewed FROM slide_views GROUP BY visitor_id"
     ).fetchall()
+    latest_devices = {
+        visitor_id: (platform or "Unknown", browser or "Unknown")
+        for visitor_id, platform, browser in conn.execute(
+            """
+            SELECT visitor_id, platform, browser
+            FROM sessions AS current
+            WHERE rowid = (
+                SELECT rowid FROM sessions AS recent
+                WHERE recent.visitor_id = current.visitor_id
+                ORDER BY recent.created_at DESC, recent.rowid DESC LIMIT 1
+            )
+            """
+        ).fetchall()
+    }
 
     completion_values = []
     visitor_data = []
     for visitor_id, viewed in visitor_rows:
         percent = (viewed / total_slides * 100.0) if total_slides else 0.0
         completion_values.append(percent)
+        platform, browser = latest_devices.get(visitor_id, ("Unknown", "Unknown"))
         visitor_data.append({
             "visitor_id": visitor_id,
+            "platform": platform,
+            "browser": browser,
             "viewed": viewed,
             "total": total_slides,
             "completion": round(percent, 1),
@@ -110,8 +133,11 @@ def print_summary() -> None:
     for bucket, count in data["distribution"].items():
         print(f"  {bucket}%: {count}")
     print("\nVisitor details:")
+    print("  Visitor       Device / Browser          Viewed       Completion")
+    print("  ------------------------------------------------------------------")
     for entry in data["visitors"]:
-        print(f"  {entry['visitor_id'][:8]}...  {entry['viewed']} / {entry['total']}  {entry['completion']}%")
+        device = device_label(entry['platform'], entry['browser'])
+        print(f"  {entry['visitor_id'][:8]}...  {device:<26} {entry['viewed']:>3} / {entry['total']:<3}    {entry['completion']:>5}%")
 
 
 def main() -> None:

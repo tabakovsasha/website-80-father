@@ -71,6 +71,10 @@ def ensure_db() -> None:
         session_columns = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
         if "total_slides" not in session_columns:
             conn.execute("ALTER TABLE sessions ADD COLUMN total_slides INTEGER NOT NULL DEFAULT 0")
+        if "platform" not in session_columns:
+            conn.execute("ALTER TABLE sessions ADD COLUMN platform TEXT")
+        if "browser" not in session_columns:
+            conn.execute("ALTER TABLE sessions ADD COLUMN browser TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_slide_views_visitor ON slide_views(visitor_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_slide_views_session ON slide_views(session_id)")
         conn.commit()
@@ -105,22 +109,59 @@ def validate_common(payload: dict) -> tuple[str, str, int] | tuple[None, None, N
     return visitor_id, session_id, total_slides
 
 
-def record_visit(payload: dict) -> tuple[bool, str]:
+def detect_device_browser(user_agent: str) -> tuple[str, str]:
+    ua = user_agent or ""
+    if "iPad" in ua:
+        platform = "iPad"
+    elif "iPhone" in ua:
+        platform = "iPhone"
+    elif "Android" in ua:
+        platform = "Android"
+    elif "Windows" in ua:
+        platform = "Windows"
+    elif "Mac OS X" in ua or "Macintosh" in ua:
+        platform = "macOS"
+    elif "Linux" in ua:
+        platform = "Linux"
+    else:
+        platform = "Unknown"
+
+    if "Edg/" in ua or "Edge/" in ua:
+        browser = "Edge"
+    elif "Firefox/" in ua or "FxiOS/" in ua:
+        browser = "Firefox"
+    elif "Chrome/" in ua or "CriOS/" in ua:
+        browser = "Chrome"
+    elif "Safari/" in ua:
+        browser = "Safari"
+    else:
+        browser = "Unknown"
+    return platform, browser
+
+
+def device_label(platform: str, browser: str) -> str:
+    if platform == "Unknown" and browser == "Unknown":
+        return "Unknown"
+    return f"{platform} / {browser}"
+
+
+def record_visit(payload: dict, user_agent: str = "") -> tuple[bool, str]:
     visitor_id, session_id, total_slides = validate_common(payload)
     if not visitor_id:
         return False, "invalid visit payload"
+    platform, browser = detect_device_browser(user_agent)
     now = iso_now()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("INSERT OR IGNORE INTO visitors(visitor_id, created_at) VALUES(?, ?)", (visitor_id, now))
         conn.execute(
-            "INSERT OR IGNORE INTO sessions(session_id, visitor_id, total_slides, created_at) VALUES(?, ?, ?, ?)",
-            (session_id, visitor_id, total_slides, now),
+            "INSERT OR IGNORE INTO sessions(session_id, visitor_id, total_slides, platform, browser, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+            (session_id, visitor_id, total_slides, platform, browser, now),
         )
         conn.commit()
     return True, "ok"
 
 
-def record_slide(payload: dict) -> tuple[bool, str]:
+def record_slide(payload: dict, user_agent: str = "") -> tuple[bool, str]:
     visitor_id, session_id, total_slides = validate_common(payload)
     slide_id = payload.get("slide_id")
     slide_index = payload.get("slide_index")
@@ -132,6 +173,7 @@ def record_slide(payload: dict) -> tuple[bool, str]:
         return False, "invalid slide index"
     if slide_index >= len(slides) or slides[slide_index] != slide_name:
         return False, "slide index does not match manifest"
+    platform, browser = detect_device_browser(user_agent)
     with sqlite3.connect(DB_PATH) as conn:
         session = conn.execute("SELECT visitor_id, total_slides FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         if session and session[0] != visitor_id:
@@ -140,8 +182,8 @@ def record_slide(payload: dict) -> tuple[bool, str]:
             now = iso_now()
             conn.execute("INSERT OR IGNORE INTO visitors(visitor_id, created_at) VALUES(?, ?)", (visitor_id, now))
             conn.execute(
-                "INSERT OR IGNORE INTO sessions(session_id, visitor_id, total_slides, created_at) VALUES(?, ?, ?, ?)",
-                (session_id, visitor_id, total_slides, now),
+                "INSERT OR IGNORE INTO sessions(session_id, visitor_id, total_slides, platform, browser, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+                (session_id, visitor_id, total_slides, platform, browser, now),
             )
         conn.execute(
             "INSERT OR IGNORE INTO slide_views(visitor_id, session_id, slide_id, slide_index, total_slides, viewed_at) VALUES(?, ?, ?, ?, ?, ?)",
@@ -167,12 +209,27 @@ def get_stats() -> dict:
         total_visitors = conn.execute("SELECT COUNT(*) FROM visitors").fetchone()[0]
         total_visits = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
         visitor_rows = conn.execute("SELECT visitor_id, COUNT(DISTINCT slide_id) FROM slide_views GROUP BY visitor_id").fetchall()
+        latest_devices = {
+            visitor_id: (platform or "Unknown", browser or "Unknown")
+            for visitor_id, platform, browser in conn.execute(
+                """
+                SELECT visitor_id, platform, browser
+                FROM sessions AS current
+                WHERE rowid = (
+                    SELECT rowid FROM sessions AS recent
+                    WHERE recent.visitor_id = current.visitor_id
+                    ORDER BY recent.created_at DESC, recent.rowid DESC LIMIT 1
+                )
+                """
+            ).fetchall()
+        }
     values = []
     visitors = []
     for visitor_id, viewed in visitor_rows:
         completion = min(100.0, viewed / total_slides * 100.0) if total_slides else 0.0
         values.append(completion)
-        visitors.append({"visitor_id": visitor_id, "viewed": viewed, "total": total_slides, "completion": round(completion, 1)})
+        platform, browser = latest_devices.get(visitor_id, ("Unknown", "Unknown"))
+        visitors.append({"visitor_id": visitor_id, "platform": platform, "browser": browser, "viewed": viewed, "total": total_slides, "completion": round(completion, 1)})
     values_sorted = sorted(values)
     if values_sorted:
         mid = len(values_sorted) // 2
@@ -206,9 +263,9 @@ def stats_text() -> str:
         f"Completed slideshow: {stats['completed_slideshow']}", f"Completion rate: {stats['completion_rate']}%",
         f"Average completion: {stats['average_completion']}%", f"Median completion: {stats['median_completion']}%",
         f"Visitors at 100%: {stats['visitors_reaching_100']}", f"Percentage at 100%: {stats['percent_reaching_100']}%", "",
-        "Visitor       Viewed       Completion", "-------------------------------------",
+        "Visitor       Device / Browser          Viewed       Completion", "------------------------------------------------------------------",
     ]
-    lines.extend(f"{row['visitor_id'][:8]}...  {row['viewed']:>3} / {row['total']:<3}    {row['completion']:>5}%" for row in stats["visitors"])
+    lines.extend(f"{row['visitor_id'][:8]}...  {device_label(row['platform'], row['browser']):<26} {row['viewed']:>3} / {row['total']:<3}    {row['completion']:>5}%" for row in stats["visitors"])
     return "\n".join(lines) + "\n"
 
 
@@ -248,7 +305,8 @@ class AnalyticsHandler(BaseHTTPRequestHandler):
         if payload is None:
             self.send_json({"ok": False, "error": "invalid request"}, HTTPStatus.BAD_REQUEST)
             return
-        ok, message = record_visit(payload) if path == "/analytics/visit" else record_slide(payload) if path == "/analytics/slide" else (False, "not found")
+        user_agent = self.headers.get("User-Agent", "")
+        ok, message = record_visit(payload, user_agent) if path == "/analytics/visit" else record_slide(payload, user_agent) if path == "/analytics/slide" else (False, "not found")
         self.send_json({"ok": ok, "error": message} if not ok else {"ok": True}, 200 if ok else HTTPStatus.NOT_FOUND if message == "not found" else HTTPStatus.BAD_REQUEST)
 
     def do_OPTIONS(self) -> None:
